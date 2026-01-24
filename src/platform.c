@@ -1,11 +1,20 @@
-#include <stdint.h>
-#include "hm_config.h"
+#include <windows.h>
 
-#if defined(_WIN32)
-  // TODO: windows critical section wrappers
-#else
-  #include <pthread.h>
-  static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
-  void hm_lock(void)   { pthread_mutex_lock(&g_lock); }
-  void hm_unlock(void) { pthread_mutex_unlock(&g_lock); }
-#endif
+static CRITICAL_SECTION g_heap_lock;
+static int g_heap_lock_inited = 0;
+
+static void ensure_heap_lock(void) {
+    if (!g_heap_lock_inited) {
+        InitializeCriticalSection(&g_heap_lock);
+        g_heap_lock_inited = 1;
+    }
+}
+
+void hm_lock(void) {
+    ensure_heap_lock();
+    EnterCriticalSection(&g_heap_lock);
+}
+
+void hm_unlock(void) {
+    LeaveCriticalSection(&g_heap_lock);
+}

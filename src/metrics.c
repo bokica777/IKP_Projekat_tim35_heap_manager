@@ -1,5 +1,6 @@
 #include "hm_metrics.h"
 #include <windows.h>
+#include "hm_internal.h"
 
 static CRITICAL_SECTION g_metrics_lock;
 static int g_lock_inited = 0;
@@ -66,4 +67,41 @@ void hm_metrics_set_free_stats(size_t total_free, size_t largest_free) {
     g_total_free = total_free;
     g_largest_free = largest_free;
     LeaveCriticalSection(&g_metrics_lock);
+}
+
+
+extern void hm_metrics_set_free_stats(size_t total_free, size_t largest_free);
+
+// from freelist_nextfit.c (we don't expose head, so simplest is to recompute by scanning segments)
+// We'll compute by scanning segments and walking physical blocks.
+
+void hm_recompute_free_stats(void) {
+    size_t total_free = 0;
+    size_t largest_free = 0;
+
+    // scan all segments and walk blocks physically
+    // segment list is private to segment.c, so easiest is:
+    // declare a getter; but to keep changes minimal, we do a small trick:
+    // we’ll add an extern pointer in segment.c (see step 8).
+    extern hm_segment_t* hm__segments_head;
+
+    hm_segment_t* s = hm__segments_head;
+    while (s) {
+        uint8_t* p = (uint8_t*)s->base;
+        uint8_t* end = p + s->size;
+
+        while (p + sizeof(hm_block_header_t) + sizeof(hm_block_footer_t) <= end) {
+            hm_block_header_t* h = (hm_block_header_t*)p;
+            if (h->size == 0 || p + h->size > end) break;
+
+            if (h->is_free) {
+                total_free += h->size;
+                if (h->size > largest_free) largest_free = h->size;
+            }
+            p += h->size;
+        }
+        s = s->next;
+    }
+
+    hm_metrics_set_free_stats(total_free, largest_free);
 }
