@@ -6,36 +6,42 @@ static CRITICAL_SECTION g_metrics_lock;
 static int g_lock_inited = 0;
 
 static uint64_t g_alloc_count = 0;
-static uint64_t g_free_count  = 0;
+static uint64_t g_free_count = 0;
 static size_t g_total_free = 0;
 static size_t g_largest_free = 0;
 
-static void ensure_lock(void) {
-    if (!g_lock_inited) {
+static void ensure_lock(void)
+{
+    if (!g_lock_inited)
+    {
         InitializeCriticalSection(&g_metrics_lock);
         g_lock_inited = 1;
     }
 }
 
-hm_metrics_t hm_get_metrics(void) {
+hm_metrics_t hm_get_metrics(void)
+{
     ensure_lock();
     EnterCriticalSection(&g_metrics_lock);
 
     hm_metrics_t m;
     m.alloc_count = g_alloc_count;
-    m.free_count  = g_free_count;
+    m.free_count = g_free_count;
     m.total_free_bytes = g_total_free;
     m.largest_free_block = g_largest_free;
 
     LeaveCriticalSection(&g_metrics_lock);
 
-    if (m.total_free_bytes == 0) m.external_fragmentation = 0.0;
-    else m.external_fragmentation = 1.0 - ((double)m.largest_free_block / (double)m.total_free_bytes);
+    if (m.total_free_bytes == 0)
+        m.external_fragmentation = 0.0;
+    else
+        m.external_fragmentation = 1.0 - ((double)m.largest_free_block / (double)m.total_free_bytes);
 
     return m;
 }
 
-void hm_reset_metrics(void) {
+void hm_reset_metrics(void)
+{
     ensure_lock();
     EnterCriticalSection(&g_metrics_lock);
 
@@ -47,21 +53,24 @@ void hm_reset_metrics(void) {
     LeaveCriticalSection(&g_metrics_lock);
 }
 
-void hm_metrics_on_alloc(void) {
+void hm_metrics_on_alloc(void)
+{
     ensure_lock();
     EnterCriticalSection(&g_metrics_lock);
     g_alloc_count++;
     LeaveCriticalSection(&g_metrics_lock);
 }
 
-void hm_metrics_on_free(void) {
+void hm_metrics_on_free(void)
+{
     ensure_lock();
     EnterCriticalSection(&g_metrics_lock);
     g_free_count++;
     LeaveCriticalSection(&g_metrics_lock);
 }
 
-void hm_metrics_set_free_stats(size_t total_free, size_t largest_free) {
+void hm_metrics_set_free_stats(size_t total_free, size_t largest_free)
+{
     ensure_lock();
     EnterCriticalSection(&g_metrics_lock);
     g_total_free = total_free;
@@ -69,34 +78,32 @@ void hm_metrics_set_free_stats(size_t total_free, size_t largest_free) {
     LeaveCriticalSection(&g_metrics_lock);
 }
 
-
 extern void hm_metrics_set_free_stats(size_t total_free, size_t largest_free);
 
-// from freelist_nextfit.c (we don't expose head, so simplest is to recompute by scanning segments)
-// We'll compute by scanning segments and walking physical blocks.
-
-void hm_recompute_free_stats(void) {
+void hm_recompute_free_stats(void)
+{
     size_t total_free = 0;
     size_t largest_free = 0;
 
-    // scan all segments and walk blocks physically
-    // segment list is private to segment.c, so easiest is:
-    // declare a getter; but to keep changes minimal, we do a small trick:
-    // we’ll add an extern pointer in segment.c (see step 8).
-    extern hm_segment_t* hm__segments_head;
+    extern hm_segment_t *hm__segments_head;
 
-    hm_segment_t* s = hm__segments_head;
-    while (s) {
-        uint8_t* p = (uint8_t*)s->base;
-        uint8_t* end = p + s->size;
+    hm_segment_t *s = hm__segments_head;
+    while (s)
+    {
+        uint8_t *p = (uint8_t *)s->base;
+        uint8_t *end = p + s->size;
 
-        while (p + sizeof(hm_block_header_t) + sizeof(hm_block_footer_t) <= end) {
-            hm_block_header_t* h = (hm_block_header_t*)p;
-            if (h->size == 0 || p + h->size > end) break;
+        while (p + sizeof(hm_block_header_t) + sizeof(hm_block_footer_t) <= end)
+        {
+            hm_block_header_t *h = (hm_block_header_t *)p;
+            if (h->size == 0 || p + h->size > end)
+                break;
 
-            if (h->is_free) {
+            if (h->is_free)
+            {
                 total_free += h->size;
-                if (h->size > largest_free) largest_free = h->size;
+                if (h->size > largest_free)
+                    largest_free = h->size;
             }
             p += h->size;
         }

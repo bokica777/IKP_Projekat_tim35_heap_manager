@@ -6,8 +6,6 @@
 extern "C" {
 #endif
 
-// Inicijalizacija / shutdown (nije eksplicitno u specifikaciji,
-// ali će ti olakšati segment management i testiranje)
 int hm_init(hm_config_t cfg);
 void hm_shutdown(void);
 

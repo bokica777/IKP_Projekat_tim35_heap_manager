@@ -5,12 +5,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-
-// lock functions (implemented in platform.c)
 void hm_lock(void);
 void hm_unlock(void);
 
-// metrics internal helpers (you already have them)
 void hm_metrics_on_alloc(void);
 void hm_metrics_on_free(void);
 
@@ -32,16 +29,17 @@ hm_config_t hm_default_config(void)
     return c;
 }
 
-int hm_init(hm_config_t cfg) {
+int hm_init(hm_config_t cfg)
+{
     g_cfg = cfg;
     hm_segment_system_set_cfg(cfg.segment_size, cfg.max_free_segments);
     g_inited = 1;
-    if (!hm_segment_create()) return -1;
+    if (!hm_segment_create())
+        return -1;
 
     hm_recompute_free_stats();
     return 0;
 }
-
 
 void hm_shutdown(void)
 {
@@ -75,7 +73,6 @@ void *allocate_memory(int size)
     hm_block_header_t *b = hm_nextfit_find(need_total);
     if (!b)
     {
-        // need a new segment
         if (!hm_segment_create())
         {
             if (g_cfg.enable_thread_safety)
@@ -91,26 +88,13 @@ void *allocate_memory(int size)
         }
     }
 
-    // take from freelist
     hm_freelist_remove(b);
 
-    // this segment is no longer fully free (if it was)
     if (b->seg && b->seg->is_fully_free)
     {
         b->seg->is_fully_free = 0;
-        // segment.c counts fully-free segments; easiest is:
-        // we decremented there implicitly? We didn't.
-        // We'll handle counting by recomputing: simplest approach below:
-        // (to keep code simple we won't track decrement here; instead, mark flag and let release logic rely on actual flag+count in segment.c)
-        // For correctness of release threshold, we must update count. We'll do it lazily: when segment becomes fully free we increment there.
-        // => So we must NOT rely on stale g_free_segment_count.
-        // To keep it correct right now, we'll flip counting approach: in segment.c we increment on create only.
-        // We'll compensate by: on first allocation from fresh segment, we should decrement free segment count.
-        // But segment.c keeps count private; simplest: don't count "fresh segment" as free until after first free.
-        // However we already did. So we need a small fix:
     }
 
-    // Split if possible (puts remainder back into free list)
     b->is_free = 1;
     b = hm_split_block(b, need_total);
 
@@ -137,17 +121,19 @@ void free_memory(void *address)
     hm_block_header_t *b = hm_block_from_payload(address);
     b->is_free = 1;
 
-    // coalesce neighbors (remove merged neighbors from freelist inside hm_coalesce)
     b = hm_coalesce(b);
 
-    // insert final block
     hm_freelist_insert(b);
 
-    // if whole segment is one free block => mark fully free and enforce limit
     if (b->seg)
     {
-        uint8_t *seg_base = (uint8_t *)b->seg->base;
-        if ((uint8_t *)b == seg_base && b->size == b->seg->size)
+        size_t pro_sz = hm_align_up(sizeof(hm_block_header_t) + sizeof(hm_block_footer_t), HM_ALIGN);
+        size_t epi_sz = hm_align_up(sizeof(hm_block_header_t), HM_ALIGN);
+
+        uint8_t *usable_start = (uint8_t *)b->seg->base + pro_sz;
+        uint8_t *epilog_ptr = (uint8_t *)b->seg->base + b->seg->size - epi_sz;
+
+        if ((uint8_t *)b == usable_start && (uint8_t *)b + b->size == epilog_ptr)
         {
             if (!b->seg->is_fully_free)
             {

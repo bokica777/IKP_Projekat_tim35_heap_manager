@@ -2,7 +2,6 @@
 #include "hm_jobs.h"
 #include "heap_manager.h"
 
-// deklaracije iz jobs.c
 int hm_jobs_pop_blocking(hm_job_t *out);
 
 typedef struct
@@ -33,7 +32,6 @@ static DWORD WINAPI worker_main(LPVOID p)
             job.result = NULL;
         }
 
-        // signal “done” ako neko čeka
         if (job.done_event)
         {
             SetEvent((HANDLE)job.done_event);
@@ -63,10 +61,6 @@ int hm_pool_start(int workers)
 void hm_pool_stop(void)
 {
     InterlockedExchange(&g_pool.stop, 1);
-
-    // probudi workere: pošto čekaju na semaforu,
-    // možeš ReleaseSemaphore više puta da ih “izvučeš”.
-    // (ovo ćemo lepše srediti kasnije)
 
     WaitForMultipleObjects(g_pool.thread_count, g_pool.threads, TRUE, 2000);
 

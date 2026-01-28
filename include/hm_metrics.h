@@ -13,7 +13,6 @@ typedef struct {
 hm_metrics_t hm_get_metrics(void);
 void hm_reset_metrics(void);
 
-/* internal helpers (koriste ih src fajlovi) */
 void hm_metrics_on_alloc(void);
 void hm_metrics_on_free(void);
 void hm_metrics_set_free_stats(size_t total_free, size_t largest_free);

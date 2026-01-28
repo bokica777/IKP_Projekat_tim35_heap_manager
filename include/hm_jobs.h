@@ -10,14 +10,14 @@ typedef enum {
 typedef struct {
     hm_job_type_t type;
     uint32_t request_id;
-
-    // input
     int size;
     void* address;
-
-    // output (worker popunjava)
     void* result;
-
-    // signal za “gotovo”
-    void* done_event; // Windows HANDLE, ali držimo kao void* da header ostane “čist”
+    void* done_event;
 } hm_job_t;
+
+int hm_jobs_init(void);
+void hm_jobs_shutdown(void);
+
+int hm_jobs_push(hm_job_t* job);
+int hm_jobs_pop_blocking(hm_job_t** out);
