@@ -22,7 +22,7 @@ static inline hm_block_footer_t *hm_footer_of(hm_block_header_t *h)
 hm_config_t hm_default_config(void)
 {
     hm_config_t c;
-    c.segment_size = 1024 * 1024; // 1MB
+    c.segment_size = 1024 * 1024;
     c.max_free_segments = 5;
     c.algo = HM_ALGO_NEXT_FIT;
     c.enable_thread_safety = 1;
@@ -98,7 +98,6 @@ void *allocate_memory(int size)
     b->is_free = 1;
     b = hm_split_block(b, need_total);
 
-    // mark used
     b->is_free = 0;
     hm_footer_of(b)->size = b->size;
 

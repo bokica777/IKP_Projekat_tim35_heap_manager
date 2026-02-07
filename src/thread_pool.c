@@ -1,8 +1,7 @@
 #include <windows.h>
 #include "hm_jobs.h"
 #include "heap_manager.h"
-
-int hm_jobs_pop_blocking(hm_job_t *out);
+#include "hm_results.h"
 
 typedef struct
 {
@@ -18,24 +17,30 @@ static DWORD WINAPI worker_main(LPVOID p)
     (void)p;
     while (InterlockedCompareExchange(&g_pool.stop, 0, 0) == 0)
     {
-        hm_job_t job;
-        if (hm_jobs_pop_blocking(&job) != 0)
+        hm_job_t *job = NULL;
+        if (hm_jobs_pop_blocking(&job) != 0 || !job)
             continue;
 
-        if (job.type == HM_JOB_ALLOC)
+        if (job->type == HM_JOB_STOP)
         {
-            job.result = allocate_memory(job.size);
-        }
-        else if (job.type == HM_JOB_FREE)
-        {
-            free_memory(job.address);
-            job.result = NULL;
+            HeapFree(GetProcessHeap(), 0, job);
+            return 0;
         }
 
-        if (job.done_event)
+        if (job->type == HM_JOB_ALLOC)
         {
-            SetEvent((HANDLE)job.done_event);
+            job->result = allocate_memory(job->size);
+            hm_results_set_done(job->request_id, job->result);
         }
+        else if (job->type == HM_JOB_FREE)
+        {
+            free_memory(job->address);
+            hm_results_set_done(job->request_id, NULL);
+            job->result = NULL;
+        }
+
+        if (job->done_event)
+            SetEvent((HANDLE)job->done_event);
     }
     return 0;
 }
@@ -60,15 +65,27 @@ int hm_pool_start(int workers)
 
 void hm_pool_stop(void)
 {
-    InterlockedExchange(&g_pool.stop, 1);
+    if (!g_pool.threads || g_pool.thread_count <= 0)
+        return;
 
-    WaitForMultipleObjects(g_pool.thread_count, g_pool.threads, TRUE, 2000);
+    for (int i = 0; i < g_pool.thread_count; i++)
+    {
+        hm_job_t* j = (hm_job_t*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(hm_job_t));
+        if (!j) continue;
+        j->type = HM_JOB_STOP;
+        hm_jobs_push(j);
+    }
+
+    WaitForMultipleObjects(g_pool.thread_count, g_pool.threads, TRUE, INFINITE);
 
     for (int i = 0; i < g_pool.thread_count; i++)
     {
         if (g_pool.threads[i])
             CloseHandle(g_pool.threads[i]);
     }
+
     HeapFree(GetProcessHeap(), 0, g_pool.threads);
     g_pool.threads = NULL;
+    g_pool.thread_count = 0;
+    g_pool.stop = 1;
 }

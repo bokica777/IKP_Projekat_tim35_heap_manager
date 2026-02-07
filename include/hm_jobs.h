@@ -4,7 +4,8 @@
 
 typedef enum {
     HM_JOB_ALLOC = 1,
-    HM_JOB_FREE  = 2
+    HM_JOB_FREE  = 2,
+    HM_JOB_STOP = 3
 } hm_job_type_t;
 
 typedef struct {

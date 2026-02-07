@@ -69,7 +69,6 @@ static void hm_segment_release_one_free_segment(void)
             hm_block_header_t *main_free = hm_segment_usable_first_block(cur);
             hm_freelist_remove(main_free);
 
-            // unlink from segment list
             if (prev)
                 prev->next = cur->next;
             else
